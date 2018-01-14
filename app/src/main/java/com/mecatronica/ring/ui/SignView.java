@@ -131,6 +131,7 @@ public class SignView extends View {
         mSignalingTop = false;
         mSignalingBottom = false;
         mOutBounds.setEmpty();
+        Sinalize();
         return;
     }
 
@@ -139,6 +140,7 @@ public class SignView extends View {
         mSignalingRight = true;
         mSignalingTop = true;
         mSignalingBottom = true;
+        Sinalize();
         return;
     }
 

@@ -942,10 +942,10 @@ long i = 0;
 
         mMatched = centerDistance(outBounds, targetCenter) < THRESHOLD;
         if (!mMatched) {
-            signView.setSignalingLeft(outBounds.exactCenterY() / (targetCenter.exactCenterY()) < 1f);
-            signView.setSignalingRight(outBounds.exactCenterY() / (targetCenter.exactCenterY()) > 1f);
-            signView.setSignalingTop(outBounds.exactCenterX() / (targetCenter.exactCenterX()) < 1f);
-            signView.setSignalingBottom(outBounds.exactCenterX() / (targetCenter.exactCenterX()) > 1f);
+            signView.setSignalingLeft(outBounds.exactCenterY() / (targetCenter.exactCenterY()) < 1.0f);
+            signView.setSignalingRight(outBounds.exactCenterY() / (targetCenter.exactCenterY()) > 1.0f);
+            signView.setSignalingTop(outBounds.exactCenterX() / (targetCenter.exactCenterX()) < 1.0f);
+            signView.setSignalingBottom(outBounds.exactCenterX() / (targetCenter.exactCenterX()) > 1.0f);
         }
         signView.setRect(cameraToScreenCoord(outBounds));
     }
