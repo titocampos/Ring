@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Ring</string>
+    <string name="picture">Picture</string>
+    <string name="request_permission">Este aplicativo requer acesso à câmera.</string>
+    <string name="camera_error">Este equipamento não suporta Camera2 API.</string>
+    <string name="settings_menu_item">Configurações</string>
+    <string name="settings_title">Configurações</string>
+    <string name="pref_key">ring_prefs</string>
+    <string name="pref_status">pref_status</string>
+    <string name="pref_device">pref_device</string>
+</resources>
