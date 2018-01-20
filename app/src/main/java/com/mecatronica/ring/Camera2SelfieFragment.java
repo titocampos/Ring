@@ -58,7 +58,6 @@ import android.view.WindowManager;
 import android.widget.Toast;
 import com.mecatronica.ring.ui.DrawView;
 import com.mecatronica.ring.ui.SignView;
-
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -74,11 +73,8 @@ import java.util.Locale;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
-import static java.lang.Math.abs;
-
 public class Camera2SelfieFragment extends Fragment implements View.OnClickListener, FragmentCompat.OnRequestPermissionsResultCallback {
 
-    private BluetoothListener mBluetoothListener = null;
     private MediaPlayer mMediaPlayer;
     private static final String FRAGMENT_DIALOG = "dialog";
     private static final SparseIntArray ORIENTATIONS = new SparseIntArray();
@@ -344,7 +340,7 @@ public class Camera2SelfieFragment extends Fragment implements View.OnClickListe
                         }
                     } else {
                         mAntiFreezeCount--;
-                        if (mAntiFreezeCount == 0) {
+                        if (mAntiFreezeCount <= 0) {
                             mState = STATE_PREVIEW;
                         } else {
                             break;
@@ -361,7 +357,7 @@ public class Camera2SelfieFragment extends Fragment implements View.OnClickListe
                         mState = STATE_WAITING_NON_PRECAPTURE;
                     } else {
                         mAntiFreezeCount--;
-                        if (mAntiFreezeCount == 0) {
+                        if (mAntiFreezeCount <= 0) {
                             mState = STATE_PREVIEW;
                         } else {
                             break;
@@ -377,7 +373,7 @@ public class Camera2SelfieFragment extends Fragment implements View.OnClickListe
                         captureStillPicture();
                     } else {
                         mAntiFreezeCount--;
-                        if (mAntiFreezeCount == 0) {
+                        if (mAntiFreezeCount <= 0) {
                             mState = STATE_PREVIEW;
                         } else {
                             break;
@@ -878,7 +874,7 @@ public class Camera2SelfieFragment extends Fragment implements View.OnClickListe
     private static int mScreenHeight;
     private static final int OFFSET_X = 280;
     private static final int OFFSET_Y = -50;
-    private static final int FREEZE_COUNT = 35;
+    private static final int FREEZE_COUNT = 25;
     private static int mAntiFreezeCount = FREEZE_COUNT;
     private static long mLastFoundMillis = System.currentTimeMillis();
     private static final long TIMEOUT = 300;
@@ -886,7 +882,7 @@ public class Camera2SelfieFragment extends Fragment implements View.OnClickListe
     private static final int THRESHOLD = 100;
     private static final int REFRESING_RATE = 6;
     private static int mCenteredCounter = 0;
-    private static int CENTERED = 5;
+    private static int CENTERED = 9;
     private Handler mUIHandler = new Handler(Looper.getMainLooper());
     private final ArrayList<DrawView> mFaceRectList = new ArrayList<>();
     private final Object mComputeFaceLock = new Object();
@@ -895,10 +891,6 @@ public class Camera2SelfieFragment extends Fragment implements View.OnClickListe
 
     private synchronized void runOnUiThread(Runnable r) {
         if (mUIHandler != null) mUIHandler.post(r);
-    }
-
-    public void setBluetoothListener(BluetoothListener b) {
-        mBluetoothListener = b;
     }
 
     private void getWIdthsAndHeights(WindowManager wm, Size largest) {
@@ -942,10 +934,10 @@ long i = 0;
 
         mMatched = centerDistance(outBounds, targetCenter) < THRESHOLD;
         if (!mMatched) {
-            signView.setSignalingLeft(outBounds.exactCenterY() / (targetCenter.exactCenterY()) < 1.0f);
-            signView.setSignalingRight(outBounds.exactCenterY() / (targetCenter.exactCenterY()) > 1.0f);
-            signView.setSignalingTop(outBounds.exactCenterX() / (targetCenter.exactCenterX()) < 1.0f);
-            signView.setSignalingBottom(outBounds.exactCenterX() / (targetCenter.exactCenterX()) > 1.0f);
+            signView.setSignalingLeft(outBounds.exactCenterY() / (targetCenter.exactCenterY()) < 0.98f);
+            signView.setSignalingRight(outBounds.exactCenterY() / (targetCenter.exactCenterY()) > 1.02f);
+            signView.setSignalingTop(outBounds.exactCenterX() / (targetCenter.exactCenterX()) < 0.98f);
+            signView.setSignalingBottom(outBounds.exactCenterX() / (targetCenter.exactCenterX()) > 1.02f);
         }
         signView.setRect(cameraToScreenCoord(outBounds));
     }
@@ -959,67 +951,56 @@ long i = 0;
         return Math.sqrt(((x1 - x2) * (x1 - x2)) + ((y1 - y2) * (y1 - y2)));
     }
 
-    private void processFace(CaptureResult result){
-        synchronized (mComputeFaceLock) {
-            Integer mode = result.get(CaptureResult.STATISTICS_FACE_DETECT_MODE);
-            final Face[] faces = result.get(CaptureResult.STATISTICS_FACES);
+    private void processFace(CaptureResult result) {
+        Integer mode = result.get(CaptureResult.STATISTICS_FACE_DETECT_MODE);
+        final Face[] faces = result.get(CaptureResult.STATISTICS_FACES);
 
-            if (faces != null && mode != null && faces.length >= 1) {
-                mLastFoundMillis = System.currentTimeMillis();
+        if (faces != null && mode != null && faces.length >= 1) {
+            mLastFoundMillis = System.currentTimeMillis();
 
-                if (mUpdateCounter >= REFRESING_RATE) {
-                    mMatched = false;
-                    processOutBounds(faces);
+            if (mUpdateCounter >= REFRESING_RATE) {
+                mMatched = false;
+                processOutBounds(faces);
 
-                    if (mMatched) {
-                        mCenteredCounter++;
+                if (mMatched) {
+                    mCenteredCounter++;
 
-                        if (mCenteredCounter == CENTERED - 3) {
-                            signView.Flash();
-                        } else if (mCenteredCounter >= CENTERED) {
-                            mCenteredCounter = 0;
-                            takePicture();
-                            CENTERED = 9;
-                        }
-                    } else {
+                    if (mCenteredCounter == CENTERED - 3) {
+                        signView.Flash();
+                    } else if (mCenteredCounter >= CENTERED) {
                         mCenteredCounter = 0;
+                        takePicture();
+                        CENTERED = 15;
+                        signView.Clear();
                     }
-                    if (mCenteredCounter < CENTERED - 3) {
-                        signView.Sinalize();
-                    }
-                    mUpdateCounter = 0;
                 } else {
-                    mUpdateCounter++;
+                    mCenteredCounter = 0;
                 }
-            } else if (System.currentTimeMillis() - mLastFoundMillis > TIMEOUT) {
-                signView.Clear();
-                mLastFoundMillis = System.currentTimeMillis();
-                mCenteredCounter = 0;
-                CENTERED = 5;
+                if (mCenteredCounter < CENTERED - 3) {
+                    signView.Sinalize();
+                }
+                mUpdateCounter = 0;
+            } else {
+                mUpdateCounter++;
             }
-
-            if (faces == null || faces.length < mFaceRectList.size())
-                clearFaceRects();
-
-            if (faces != null && mode != null) {
-                ArrayList<Rect> boundList = new ArrayList<>();
-                for (Face face : faces)
-                    boundList.add(cameraToScreenCoord(face.getBounds()));
-                updateFaceRectList(boundList);
-            }
-
-            drawFaceRects();
-
-            /* testing sinaling
+        } else if (System.currentTimeMillis() - mLastFoundMillis > TIMEOUT) {
             signView.Clear();
-            signView.setSignalingLeft(true);
-            signView.setSignalingRight(true);
-            signView.setSignalingTop(true);
-            signView.setSignalingBottom(true);
-            signView.setRect(new Rect(980, 980, 350, 1450));
-            signView.setRect(new Rect(350, 980, 980, 1450));
-            */
+            mLastFoundMillis = System.currentTimeMillis();
+            mCenteredCounter = 0;
+            CENTERED = 5;
         }
+
+        if (faces == null || faces.length < mFaceRectList.size())
+            clearFaceRects();
+
+        if (faces != null && mode != null) {
+            ArrayList<Rect> boundList = new ArrayList<>();
+            for (Face face : faces)
+                boundList.add(cameraToScreenCoord(face.getBounds()));
+            updateFaceRectList(boundList);
+        }
+
+        drawFaceRects();
     }
 
     private Rect screenToCameraCoord(Rect rect) {
