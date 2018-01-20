@@ -55,9 +55,11 @@ public class CameraActivity extends AbstractActivity implements ServiceConnectio
     public void onServiceConnected(ComponentName name, IBinder service) {
         BluetoothService.Controller c = (BluetoothService.Controller) service;
         mBluetoothListener = c.getListener();
+    }
 
-        if (mCamera2SelfieFragment != null)
-            mCamera2SelfieFragment.setBluetoothListener(mBluetoothListener);
+    public void sendMessage(String input){
+        if ((mBluetoothListener != null) && mBluetoothListener.bluetoothIsOn())
+            mBluetoothListener.sendMessage(input);
     }
 
     @Override
