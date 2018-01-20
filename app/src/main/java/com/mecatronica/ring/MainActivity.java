@@ -31,7 +31,7 @@ public class MainActivity extends AbstractActivity implements SensorEventListene
     private Sensor mAccelerometer;
     private BluetoothListener mBluetoothListener = null;
     private BluetoothAdapter mBTAdapter;
-    private boolean startedBT = false;
+    private boolean autoStartedBT = false;
     private static final String TAG = MainActivity.class.getSimpleName();
     @Override
     protected void onPause() {
@@ -41,7 +41,7 @@ public class MainActivity extends AbstractActivity implements SensorEventListene
 
     @Override
     protected void onDestroy(){
-        if (startedBT){
+        if (autoStartedBT){
             mBTAdapter.disable();
         }
 
@@ -132,7 +132,7 @@ public class MainActivity extends AbstractActivity implements SensorEventListene
             return;
         } else {
             if (!mBTAdapter.isEnabled() && getPreferenceStatus()) {
-                startedBT = true;
+                autoStartedBT = true;
                 Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
                 startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
             }
@@ -148,16 +148,13 @@ public class MainActivity extends AbstractActivity implements SensorEventListene
         mAccelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
         mSensorManager.registerListener(this, mAccelerometer, SensorManager.SENSOR_DELAY_NORMAL);
 
-        if (null == savedInstanceState) {
-            if (mBluetoothListener == null) {
-                Intent intent = new Intent(this, BluetoothService.class);
-                bindService(intent, this, Context.BIND_AUTO_CREATE);
-            }
+        if (mBluetoothListener == null) {
+            Intent intent = new Intent(this, BluetoothService.class);
+            bindService(intent, this, Context.BIND_AUTO_CREATE);
         }
     }
 
     private boolean isBluetoothAvailable(){
-        //ler das sharedpreferences
         return ((mBluetoothListener != null) && mBluetoothListener.bluetoothIsOn());
     }
 
@@ -224,6 +221,7 @@ public class MainActivity extends AbstractActivity implements SensorEventListene
     public void onServiceConnected(ComponentName name, IBinder service) {
         BluetoothService.Controller c = (BluetoothService.Controller) service;
         mBluetoothListener = c.getListener();
+        mBluetoothListener.connectDevice();
     }
 
     @Override
