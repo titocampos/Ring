@@ -8,7 +8,7 @@ import android.graphics.Rect;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.View;
-
+import com.mecatronica.ring.CameraActivity;
 import java.util.ArrayList;
 import java.util.Collections;
 
@@ -23,6 +23,7 @@ public class SignView extends View {
     private final float TEXT_SIZE = 80.0f;
     private final int BOX_STROKE_WIDTH = 5;
     private static final String TAG = SignView.class.getSimpleName();
+    private CameraActivity mActivity;
 
     public SignView(Context context) {
         super(context);
@@ -43,6 +44,8 @@ public class SignView extends View {
         setFocusable(false);
 
         paint = new Paint();
+
+        mActivity = (CameraActivity)context;
     }
 
     public void setSignalingLeft(boolean value){ this.mSignalingLeft = value;};
@@ -141,10 +144,29 @@ public class SignView extends View {
         mSignalingTop = true;
         mSignalingBottom = true;
         Sinalize();
+        mSignalingLeft = false;
+        mSignalingRight = false;
+        mSignalingTop = false;
+        mSignalingBottom = false;
         return;
     }
 
     public void Sinalize(){
+        if (!mSignalingLeft && !mSignalingRight && !mSignalingTop && !mSignalingBottom){
+            mActivity.sendMessage("0");
+        } else if (mSignalingLeft && mSignalingRight && mSignalingTop && mSignalingBottom){
+            mActivity.sendMessage("6");
+        } else{
+            if (mSignalingLeft)
+                mActivity.sendMessage("i");
+            if (mSignalingRight)
+                mActivity.sendMessage("c");
+            if (mSignalingTop)
+                mActivity.sendMessage("l");
+            if (mSignalingBottom)
+                mActivity.sendMessage("f");
+        }
+
         return;
     }
 }
