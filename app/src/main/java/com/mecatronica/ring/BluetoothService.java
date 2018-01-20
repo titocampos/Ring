@@ -13,6 +13,8 @@ import android.content.SharedPreferences;
 import android.os.Binder;
 import android.os.IBinder;
 import android.os.SystemClock;
+import android.util.Log;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -27,6 +29,7 @@ public class BluetoothService extends Service implements BluetoothListener {
     private Controller controller = new Controller();
     private BluetoothAdapter mBTAdapter;
     private BluetoothSocket mBTSocket = null;
+    private BluetoothDevice mDevice;
     private UUID BTMODULEUUID = UUID.fromString("00001101-0000-1000-8000-00805f9b34fb"); //Standard SerialPortService ID
     private ConnectThread mConnectThread;
     private ConnectedThread mConnectedThread;
@@ -37,6 +40,10 @@ public class BluetoothService extends Service implements BluetoothListener {
         public BluetoothListener getListener(){
             return(BluetoothService.this);
         }
+    }
+
+    public String getDeviceName(){
+        return ((null != mDevice)?mDevice.getName():null);
     }
 
     @Override
@@ -78,8 +85,8 @@ public class BluetoothService extends Service implements BluetoothListener {
     public void connectDevice() {
         String deviceAddress = getPreferenceDevice();
 
-        if (!deviceAddress.equals("")) {
-            BluetoothDevice device = mBTAdapter.getRemoteDevice(deviceAddress);
+        if (mBTAdapter.isEnabled() && !deviceAddress.equals("")) {
+            this.mDevice = mBTAdapter.getRemoteDevice(deviceAddress);
             if (mState == STATE_CONNECTING) {
                 if (mConnectThread != null) {
                     mConnectThread.cancel();
@@ -91,13 +98,33 @@ public class BluetoothService extends Service implements BluetoothListener {
                 mConnectedThread.cancel();
                 mConnectedThread = null;
             }
-            mConnectThread = new ConnectThread(device);
+            mConnectThread = new ConnectThread(mDevice);
             mConnectThread.start();
             setState(STATE_CONNECTING);
+        }else{
+            broadcastFailure();
+        }
+    }
+
+    @Override
+    public void disconnectDevice() {
+        if (mState == STATE_CONNECTING || mState == STATE_CONNECTED) {
+            if (mConnectThread != null) {
+                mConnectThread.cancel();
+                mConnectThread = null;
+            }
+
+            if (mConnectedThread != null) {
+                mConnectedThread.cancel();
+                mConnectedThread = null;
+            }
         }
     }
 
     private void setState(int state) {
+
+        if (mState == STATE_CONNECTING && state == STATE_NONE)
+            broadcastFailure();
         mState = state;
     }
 
@@ -133,6 +160,7 @@ public class BluetoothService extends Service implements BluetoothListener {
                 } catch (IOException e1) {
                     e1.printStackTrace();
                 }
+                setState(STATE_NONE);
                 return;
             }
             synchronized (BluetoothService.this) {
@@ -172,6 +200,13 @@ public class BluetoothService extends Service implements BluetoothListener {
         sendBroadcast(intent);
     }
 
+    private void broadcastFailure() {
+        Intent intent = new Intent();
+        intent.setAction(AbstractActivity.ACTION_CONNECTION_FAILURE);
+        intent.setPackage("com.mecatronica.ring");
+        sendBroadcast(intent);
+    }
+
     private class ConnectedThread extends Thread {
         private final BluetoothSocket mmSocket;
         private final InputStream mmInStream;
@@ -204,7 +239,7 @@ public class BluetoothService extends Service implements BluetoothListener {
                     }
                 } catch (IOException e) {
                     e.printStackTrace();
-                    mState = STATE_NONE;
+                    setState(STATE_NONE);
                     break;
                 }
             }
@@ -213,7 +248,7 @@ public class BluetoothService extends Service implements BluetoothListener {
         public void write(String input) {
             byte[] bytes = input.getBytes();
             if (!mmSocket.isConnected()){
-                mState = STATE_NONE;
+                setState(STATE_NONE);
                 return;
             }
             try {
@@ -224,7 +259,7 @@ public class BluetoothService extends Service implements BluetoothListener {
         public void cancel() {
             try {
                 mmSocket.close();
-                mState = STATE_NONE;
+                setState(STATE_NONE);
 
             } catch (IOException e) {
             }
