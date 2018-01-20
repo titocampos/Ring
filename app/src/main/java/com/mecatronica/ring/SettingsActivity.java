@@ -6,12 +6,17 @@ package com.mecatronica.ring;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.os.Bundle;
+import android.os.IBinder;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.Button;
@@ -23,18 +28,32 @@ import android.widget.Toast;
 import java.util.ArrayList;
 import java.util.Set;
 
-public class SettingsActivity extends AbstractActivity {
+public class SettingsActivity extends AbstractActivity implements ServiceConnection {
     private Switch mBtSwitch;
     private Button mDiscoverBtn;
     private TextView mBtStatusText;
     private StringAdapter mDevListAdapter;
     private ListView mDevicesList;
     private BluetoothAdapter mBTAdapter;
+    private BluetoothListener mBluetoothListener = null;
 
     @Override
     protected void onDestroy() {
         unregisterReceiver(mBTReceiver);
+
+        if (mBluetoothListener != null) {
+            unbindService(this);
+            mBluetoothListener = null;
+        }
         super.onDestroy();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+
+        if (mBtSwitch.isChecked() && (mBluetoothListener != null) && !mBluetoothListener.bluetoothIsOn())
+            mBluetoothListener.connectDevice();
     }
 
     @Override
@@ -46,6 +65,7 @@ public class SettingsActivity extends AbstractActivity {
         IntentFilter mIntentFilter = new IntentFilter();
         mIntentFilter.addAction(BluetoothDevice.ACTION_FOUND);
         mIntentFilter.addAction(AbstractActivity.ACTION_CONNECTED);
+        mIntentFilter.addAction(AbstractActivity.ACTION_CONNECTION_FAILURE);
         registerReceiver(mBTReceiver, mIntentFilter);
 
         mDevListAdapter = new StringAdapter(this, new ArrayList<StringItem>());
@@ -63,14 +83,9 @@ public class SettingsActivity extends AbstractActivity {
             Toast.makeText(getApplicationContext(),"Bluetooth device not found!",Toast.LENGTH_SHORT).show();
         } else {
             if (mBTAdapter != null && mBTAdapter.isEnabled()) {
-                mBtSwitch.setChecked(true);
-                mBtStatusText.setText("Bluetooth connected");
-                listPairedDevices();
-                setPreferenceStatus(true);
+                setStateBluetoothOn();
             } else {
-                mBtStatusText.setText("Bluetooth disabled");
-                mBtSwitch.setChecked(false);
-                setPreferenceStatus(false);
+                setStateBluetoothOff();
             }
 
             mBtSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
@@ -92,7 +107,12 @@ public class SettingsActivity extends AbstractActivity {
                 }
             });
         }
-
+        if (null == savedInstanceState) {
+            if (mBluetoothListener == null) {
+                Intent intent = new Intent(this, BluetoothService.class);
+                bindService(intent, this, Context.BIND_AUTO_CREATE);
+            }
+        }
     }
 
     private void setPreferenceStatus(boolean isOn){
@@ -159,30 +179,58 @@ public class SettingsActivity extends AbstractActivity {
     }
 
     private void bluetoothOff(View view) {
+        if (isBluetoothAvailable())
+            mBluetoothListener.disconnectDevice();
+
         mBTAdapter.disable();
         mBtStatusText.setText("Bluetooth disabled");
         Toast.makeText(getApplicationContext(),"Bluetooth turned Off", Toast.LENGTH_SHORT).show();
+    }
+
+    private void setStateBluetoothOn(){
+        mBtSwitch.setChecked(true);
+        if (!isBluetoothAvailable())
+            mBtStatusText.setText("Bluetooth enabled");
+        else
+            mBtStatusText.setText("Bluetooth connected to " + mBluetoothListener.getDeviceName());
+        listPairedDevices();
+        setPreferenceStatus(true);
+    }
+
+    private void setStateBluetoothOff(){
+        mBtSwitch.setChecked(false);
+        mBtStatusText.setText("Bluetooth Disabled");
+        setPreferenceStatus(false);
     }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent Data) {
         if (requestCode == REQUEST_ENABLE_BT) {
             if (resultCode == RESULT_OK) {
-                mBtStatusText.setText("Bluetooth enabled");
-                mBtSwitch.setChecked(true);
-                listPairedDevices();
+                setStateBluetoothOn();
             } else {
-                mBtStatusText.setText("Bluetooth Disabled");
-                mBtSwitch.setChecked(false);
+                setStateBluetoothOff();
             }
         }
+    }
+
+    private boolean isBluetoothAvailable(){
+        return ((mBluetoothListener != null) && mBluetoothListener.bluetoothIsOn());
     }
 
     private AdapterView.OnItemClickListener mDevicesClickListener = new AdapterView.OnItemClickListener() {
         public void onItemClick(AdapterView<?> av, View v, int position, long arg3) {
             StringItem item = mDevListAdapter.getItem(position);
             setPreferenceDevice(item.getDescripcion());
-            mBtStatusText.setText("Connecting to radio");
+            listPairedDevices();
+            if (isBluetoothAvailable()) {
+                mBluetoothListener.disconnectDevice();
+                mBtStatusText.setText("Desconnected from radio");
+            }
+            else if (null != mBluetoothListener ){
+                mBluetoothListener.connectDevice();
+                mBtStatusText.setText("Connecting to radio");
+            }
         }
     };
 
@@ -196,9 +244,24 @@ public class SettingsActivity extends AbstractActivity {
                 mDevListAdapter.add(new StringItem(device.getName(), device.getAddress()));
                 mDevListAdapter.notifyDataSetChanged();
             } else  if(AbstractActivity.ACTION_CONNECTED.equals(action)){
-                String device = intent.getParcelableExtra("data");
+                String device = intent.getStringExtra("data");
                 mBtStatusText.setText("Bluetooth connected to " + device);
+            } else  if(AbstractActivity.ACTION_CONNECTION_FAILURE.equals(action)) {
+                mBtStatusText.setText("Bluetooth failed to connect");
             }
         }
     };
+
+    @Override
+    public void onServiceConnected(ComponentName name, IBinder service) {
+        BluetoothService.Controller c = (BluetoothService.Controller) service;
+        mBluetoothListener = c.getListener();
+        if (isBluetoothAvailable())
+            mBtStatusText.setText("Bluetooth connected to " + mBluetoothListener.getDeviceName());
+    }
+
+    @Override
+    public void onServiceDisconnected(ComponentName name) {
+
+    }
 }
